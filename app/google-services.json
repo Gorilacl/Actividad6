@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "999892668078",
+    "project_id": "distribuidoradespachos",
+    "storage_bucket": "distribuidoradespachos.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:999892668078:android:f3f17a042462343f2c273f",
+        "android_client_info": {
+          "package_name": "cl.andres.semana4"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "999892668078-0teeth5mp5e7b0u0nlhq13f3kc0b5mla.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "cl.andres.semana4",
+            "certificate_hash": "99afdc94fdb3d3ceaefe4fa6008f16932b67e1af"
+          }
+        },
+        {
+          "client_id": "999892668078-vajg2j9qb6823fc9jg8514fks8hctpc8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEZPzpuc04lH3sBfP9CHRVy_eAc6NEVTk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "999892668078-vajg2j9qb6823fc9jg8514fks8hctpc8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
