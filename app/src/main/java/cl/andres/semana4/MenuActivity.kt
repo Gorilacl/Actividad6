@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -27,7 +28,6 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
 
@@ -35,7 +35,7 @@ class MenuActivity : ComponentActivity() {
 
     private lateinit var fused: FusedLocationProviderClient
 
-    // Launcher para solicitar permisos de ubicación
+    // pido permisos de ubicación cuando entro al menú
     private val permisosLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { resultados ->
@@ -62,7 +62,7 @@ class MenuActivity : ComponentActivity() {
                 MenuScreen(
                     onOpenApp = { startActivity(Intent(this, MainActivity::class.java)) },
                     onLogout = {
-                        FirebaseAuth.getInstance().signOut()
+                        // sin Auth: cierro sesión volviendo al login
                         startActivity(
                             Intent(this, LoginActivity::class.java).apply {
                                 addFlags(
@@ -81,7 +81,7 @@ class MenuActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // guarda la ubicación apenas se abre el menú
+        // guardo la ubicación apenas abro el menú
         solicitarPermisoYGuardar()
     }
 
@@ -105,10 +105,9 @@ class MenuActivity : ComponentActivity() {
         }
     }
 
-    // chequeo de permisos manualmente
+    // capturo la ubicación y la dejo en RTDB bajo /devices/<ANDROID_ID>/lastLocation
     @SuppressLint("MissingPermission")
     private fun capturarYGuardarUbicacion() {
-
         val fineOk = ContextCompat.checkSelfPermission(
             this, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
@@ -125,21 +124,23 @@ class MenuActivity : ComponentActivity() {
             return
         }
 
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        // como no uso FirebaseAuth, identifico el dispositivo con el ANDROID_ID
+        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            ?: "unknown"
 
         try {
             fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
                 .addOnSuccessListener { loc ->
                     if (loc != null) {
                         val ref = FirebaseDatabase.getInstance()
-                            .getReference("users")
-                            .child(uid)
+                            .getReference("devices")      // <- aquí cambio a "devices"
+                            .child(deviceId)
                             .child("lastLocation")
 
                         val data = mapOf(
                             "lat" to loc.latitude,
                             "lon" to loc.longitude,
-                            "ts" to ServerValue.TIMESTAMP
+                            "ts"  to ServerValue.TIMESTAMP
                         )
 
                         ref.setValue(data)

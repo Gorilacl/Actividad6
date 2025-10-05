@@ -1,12 +1,19 @@
 package cl.andres.semana4
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -18,14 +25,22 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import kotlin.math.*
+import com.google.firebase.database.*
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.*
 
-// Plaza de Armas
+// mis clases/recursos
+import cl.andres.semana4.RangesViewModel
+import cl.andres.semana4.SettingsActivity
+import cl.andres.semana4.R
+
+// --- Constantes ---
 private const val BODEGA_LAT = -35.016
 private const val BODEGA_LON = -71.333
+private const val RADIO_GRATIS_KM = 20.0
 
+// --- Utilidades ---
 fun gradosARadianes(grados: Double): Double = grados * Math.PI / 180.0
 
 fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
@@ -41,8 +56,6 @@ fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double 
 
 data class ShippingInput(val totalCompra: Int, val distanciaKm: Double)
 data class ShippingResult(val costoDespacho: Int, val aplicaGratis: Boolean)
-
-private const val RADIO_GRATIS_KM = 20.0
 
 fun calcularDespacho(input: ShippingInput): ShippingResult {
     val total = input.totalCompra
@@ -61,20 +74,90 @@ fun formatoCLP(valor: Int): String {
     return "$" + nf.format(valor)
 }
 
+// =======================================================
+// MainActivity
+// =======================================================
 class MainActivity : ComponentActivity() {
+
+    // Firebase + alarma + ViewModel (Room)
+    private lateinit var db: DatabaseReference
+    private var vib: Vibrator? = null       // ahora nullable
+    private var mp: MediaPlayer? = null     // ahora nullable
+    private val vm: RangesViewModel by viewModels { RangesViewModel.factory(this) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { AppScreen() }
 
+        vib = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        mp  = MediaPlayer.create(this, R.raw.alerta) // res/raw/alerta.mp3 (minúsculas)
+        db  = FirebaseDatabase.getInstance().reference
+
+        setContent {
+            AppScreen(
+                // Suscripción a RTDB en tiempo real
+                subscribeTemperature = { onValue ->
+                    db.child("sensors").child("truck1").child("temperatura")
+                        .addValueEventListener(object : ValueEventListener {
+                            override fun onDataChange(snapshot: DataSnapshot) {
+                                val f = snapshot.getValue(Double::class.java) ?: return
+                                onValue(f)
+                            }
+                            override fun onCancelled(error: DatabaseError) {}
+                        })
+                },
+                // Rangos desde Room
+                getRanges = { cb -> vm.getRanges(cb) },
+                // Alarma si sale de rango
+                onOutOfRange = { triggerAlarm() },
+                // Abrir configuración
+                onOpenSettings = {
+                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+                }
+            )
+        }
+
+        // debug rápido
         val grados = 90.0
         val rad = gradosARadianes(grados)
         println("$grados grados = $rad radianes")
     }
+
+    private fun triggerAlarm() {
+        // vibración segura
+        vib?.let { v ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createOneShot(700, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                v.vibrate(700)
+            }
+        }
+        // sonido seguro
+        mp?.let { player ->
+            if (!player.isPlaying) player.start()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // libero recursos para evitar leaks/crashes
+        mp?.release()
+        mp = null
+        vib = null
+    }
 }
 
+// =======================================================
+// UI Compose (lo que ya tenías + monitor de temperatura)
+// =======================================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppScreen() {
+fun AppScreen(
+    subscribeTemperature: ((Double) -> Unit) -> Unit = {},
+    getRanges: ((Double, Double) -> Unit) -> Unit = {},
+    onOutOfRange: () -> Unit = {},
+    onOpenSettings: () -> Unit = {}
+) {
     var kmDetectado by remember { mutableStateOf<Double?>(null) }
 
     Scaffold(
@@ -88,19 +171,21 @@ fun AppScreen() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text("Aplicación.")
-
             ConversorRadianesUI()
-
             Divider()
-
             CalculadoraDespachoUI(kmDetectado = kmDetectado)
-
             Divider()
-
             DistanciaBodegaUI(
                 bodegaLat = BODEGA_LAT,
                 bodegaLon = BODEGA_LON,
                 onKmDetectado = { km -> kmDetectado = km }
+            )
+            Divider()
+            TemperatureMonitorUI(
+                subscribeTemperature = subscribeTemperature,
+                getRanges = getRanges,
+                onOutOfRange = onOutOfRange,
+                onOpenSettings = onOpenSettings
             )
         }
     }
@@ -132,7 +217,6 @@ fun ConversorRadianesUI() {
             } else {
                 val rad = gradosARadianes(valor)
                 resultado = rad
-                println("$valor grados = $rad radianes")
             }
         },
         modifier = Modifier.fillMaxWidth(),
@@ -171,10 +255,12 @@ fun DistanciaBodegaUI(
                     ) != PackageManager.PERMISSION_GRANTED
 
                     if (lacksFine || lacksCoarse) {
-                        permisos.launch(arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        ))
+                        permisos.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
+                        )
                         return@Button
                     }
 
@@ -247,7 +333,8 @@ fun CalculadoraDespachoUI(kmDetectado: Double? = null) {
 
     Button(
         onClick = {
-            val total = totalTxt.replace(".", "").replace(',', '.').toDoubleOrNull()?.toInt()
+            val total = totalTxt.replace(".", "").replace(',', '.')
+                .toDoubleOrNull()?.toInt()
             val km = kmTxt.replace(',', '.').toDoubleOrNull()
 
             if (total == null) errorTotal = "Ingrese un total válido (entero)"
@@ -260,7 +347,6 @@ fun CalculadoraDespachoUI(kmDetectado: Double? = null) {
                 } else {
                     "Costo despacho: ${formatoCLP(r.costoDespacho)}"
                 }
-                println("DEBUG despacho → total=$total, km=$km, costo=${r.costoDespacho}, gratis=${r.aplicaGratis}")
             }
         },
         modifier = Modifier.fillMaxWidth(),
@@ -268,4 +354,39 @@ fun CalculadoraDespachoUI(kmDetectado: Double? = null) {
     ) { Text("Calcular despacho") }
 
     if (mensaje.isNotBlank()) Text(mensaje)
+}
+
+// -------- Monitor de temperatura (Parte B) --------
+@Composable
+fun TemperatureMonitorUI(
+    subscribeTemperature: ((Double) -> Unit) -> Unit,
+    getRanges: ((Double, Double) -> Unit) -> Unit,
+    onOutOfRange: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    var f by remember { mutableStateOf<Double?>(null) }
+    var c by remember { mutableStateOf<Double?>(null) }
+    var minC by remember { mutableStateOf(-5.0) }
+    var maxC by remember { mutableStateOf(4.0) }
+
+    // cargo rangos (Room)
+    LaunchedEffect(Unit) { getRanges { min, max -> minC = min; maxC = max } }
+
+    // escucho Firebase
+    LaunchedEffect(Unit) {
+        subscribeTemperature { fValue ->
+            f = fValue
+            c = (fValue - 32.0) * 5.0 / 9.0
+            val cur = c!!
+            if (cur < minC || cur > maxC) onOutOfRange()
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Monitoreo de Temperatura", style = MaterialTheme.typography.titleMedium)
+        Text("Fahrenheit: ${f?.let { String.format("%.2f °F", it) } ?: "--"}")
+        Text("Celsius: ${c?.let { String.format("%.2f °C", it) } ?: "--"}")
+        Text("Rango permitido: $minC °C  —  $maxC °C")
+        Button(onClick = onOpenSettings) { Text("Configurar rangos") }
+    }
 }
