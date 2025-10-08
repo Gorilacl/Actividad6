@@ -1,16 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permisos -->
+    <!-- 🔹 Permisos requeridos -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Hardware de ubicación (opcionales) -->
-    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
-    <uses-feature android:name="android.hardware.location.network" android:required="false" />
+    <!-- 🔹 Hardware opcional de ubicación -->
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location.network"
+        android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -22,7 +26,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PRO401Semana4">
 
-        <!-- Pantalla de inicio -->
+        <!-- 🔹 Clave de Google Maps (usada en MapActivity y MainActivity) -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="@string/google_maps_key" />
+
+        <!-- 🔹 Pantalla de inicio (login) -->
         <activity
             android:name=".LoginActivity"
             android:exported="true">
@@ -32,19 +41,26 @@
             </intent-filter>
         </activity>
 
-        <!-- Menú post-login -->
+        <!-- 🔹 Menú principal post-login -->
         <activity
             android:name=".MenuActivity"
             android:exported="true" />
 
-        <!-- App principal (conversor / despacho / distancia / temperatura) -->
+        <!-- 🔹 Pantalla principal (conversor / despacho / distancia / temperatura) -->
         <activity
             android:name=".MainActivity"
             android:exported="true" />
 
-        <!-- Configurar rangos (Room) -->
+        <!-- 🔹 Configuración de rangos de temperatura (Room) -->
         <activity
             android:name=".SettingsActivity"
             android:exported="false" />
+
+        <!-- 🔹 NUEVA: Pantalla exclusiva del mapa (Semana 9) -->
+        <activity
+            android:name=".MapActivity"
+            android:exported="true" />
+
     </application>
+
 </manifest>

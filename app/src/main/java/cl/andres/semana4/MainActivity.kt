@@ -35,6 +35,11 @@ import cl.andres.semana4.RangesViewModel
 import cl.andres.semana4.SettingsActivity
 import cl.andres.semana4.R
 
+// ------ NUEVO: Google Maps Compose ------
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.maps.android.compose.*
+
 // --- Constantes ---
 private const val BODEGA_LAT = -35.016
 private const val BODEGA_LON = -71.333
@@ -115,11 +120,6 @@ class MainActivity : ComponentActivity() {
                 }
             )
         }
-
-        // debug rápido
-        val grados = 90.0
-        val rad = gradosARadianes(grados)
-        println("$grados grados = $rad radianes")
     }
 
     private fun triggerAlarm() {
@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // =======================================================
-// UI Compose (lo que ya tenías + monitor de temperatura)
+// UI Compose (lo que ya tenías + monitor + MAPA SEMANA 9)
 // =======================================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -186,6 +186,14 @@ fun AppScreen(
                 getRanges = getRanges,
                 onOutOfRange = onOutOfRange,
                 onOpenSettings = onOpenSettings
+            )
+            // -------- NUEVO: Mapa con bodega + mi ubicación + círculo 20km --------
+            Divider()
+            Text("Mapa (Bodega, radio 20 km y tu ubicación)", style = MaterialTheme.typography.titleMedium)
+            MapSection(
+                bodegaLat = BODEGA_LAT,
+                bodegaLon = BODEGA_LON,
+                onKmDetectado = { km -> kmDetectado = km }
             )
         }
     }
@@ -388,5 +396,103 @@ fun TemperatureMonitorUI(
         Text("Celsius: ${c?.let { String.format("%.2f °C", it) } ?: "--"}")
         Text("Rango permitido: $minC °C  —  $maxC °C")
         Button(onClick = onOpenSettings) { Text("Configurar rangos") }
+    }
+}
+
+// ==================== NUEVO: SECCIÓN MAPA (Compose) ====================
+@Composable
+fun MapSection(
+    bodegaLat: Double,
+    bodegaLon: Double,
+    onKmDetectado: (Double) -> Unit
+) {
+    val context = LocalContext.current
+    val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    val bodega = LatLng(bodegaLat, bodegaLon)
+    var myLatLng by remember { mutableStateOf<LatLng?>(null) }
+
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(bodega, 12f)
+    }
+
+    // pedir permisos si faltan y capturar ubicación
+    val permisos = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { granted ->
+        val ok = granted[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                granted[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (ok) {
+            fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { loc ->
+                    loc?.let {
+                        myLatLng = LatLng(it.latitude, it.longitude)
+                        val km = haversineKm(it.latitude, it.longitude, bodegaLat, bodegaLon)
+                        onKmDetectado(km)
+                    }
+                }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val lacksFine = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) != PackageManager.PERMISSION_GRANTED
+        val lacksCoarse = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) != PackageManager.PERMISSION_GRANTED
+
+        if (lacksFine && lacksCoarse) {
+            permisos.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        } else {
+            fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { loc ->
+                    loc?.let {
+                        myLatLng = LatLng(it.latitude, it.longitude)
+                        val km = haversineKm(it.latitude, it.longitude, bodegaLat, bodegaLon)
+                        onKmDetectado(km)
+                    }
+                }
+        }
+    }
+
+    // Mapa
+    Box(Modifier.fillMaxWidth().height(280.dp)) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            uiSettings = MapUiSettings(
+                zoomControlsEnabled = true,
+                myLocationButtonEnabled = false
+            ),
+            properties = MapProperties(
+                isMyLocationEnabled = myLatLng != null
+            )
+        ) {
+            // marcador bodega
+            Marker(
+                state = MarkerState(position = bodega),
+                title = "Bodega",
+                snippet = "Punto de despacho"
+            )
+            // círculo de 20 km para despacho gratis
+            Circle(
+                center = bodega,
+                radius = RADIO_GRATIS_KM * 1000.0,
+                strokeWidth = 2f
+            )
+            // mi ubicación
+            myLatLng?.let {
+                Marker(
+                    state = MarkerState(position = it),
+                    title = "Mi ubicación"
+                )
+            }
+        }
     }
 }

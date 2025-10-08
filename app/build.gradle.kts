@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "cl.andres.semana4"
-        minSdk = 21          // mantenemos compatibilidad con Lollipop (caso del admin)
+        minSdk = 21
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -50,15 +50,17 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.core:core-ktx:1.13.1")
 
-    // ------------ Google Play Services (lo que sí usamos) ------------
+    // ------------ Google Play Services (ubicación) ------------
     implementation("com.google.android.gms:play-services-location:21.2.0")
-    // (Quitado) implementation("com.google.android.gms:play-services-auth:20.7.0")
+
+    // ------------ Google Maps (NUEVO) ------------
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.maps.android:maps-compose:4.3.3")
 
     // ------------ Firebase (BoM) ------------
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
     // Solo RTDB para mantener minSdk 21
     implementation("com.google.firebase:firebase-database-ktx")
-    // (Quitado) implementation("com.google.firebase:firebase-auth-ktx")
 
     // ------------ Room (BD local) ------------
     val roomVersion = "2.6.1"

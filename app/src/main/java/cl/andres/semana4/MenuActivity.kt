@@ -61,6 +61,8 @@ class MenuActivity : ComponentActivity() {
             MaterialTheme {
                 MenuScreen(
                     onOpenApp = { startActivity(Intent(this, MainActivity::class.java)) },
+                    // abro la pantalla exclusiva del mapa
+                    onOpenMap = { startActivity(Intent(this, MapActivity::class.java)) },
                     onLogout = {
                         // sin Auth: cierro sesión volviendo al login
                         startActivity(
@@ -133,7 +135,7 @@ class MenuActivity : ComponentActivity() {
                 .addOnSuccessListener { loc ->
                     if (loc != null) {
                         val ref = FirebaseDatabase.getInstance()
-                            .getReference("devices")      // <- aquí cambio a "devices"
+                            .getReference("devices")
                             .child(deviceId)
                             .child("lastLocation")
 
@@ -177,6 +179,7 @@ class MenuActivity : ComponentActivity() {
 @Composable
 private fun MenuScreen(
     onOpenApp: () -> Unit,
+    onOpenMap: () -> Unit,   // nuevo: abre la pantalla de mapa
     onLogout: () -> Unit
 ) {
     Scaffold(
@@ -194,6 +197,13 @@ private fun MenuScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.extraLarge
             ) { Text("Abrir aplicación") }
+
+            // botón para ir al mapa (Semana 9)
+            Button(
+                onClick = onOpenMap,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge
+            ) { Text("Abrir mapa") }
 
             OutlinedButton(
                 onClick = onLogout,
