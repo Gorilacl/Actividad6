@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">PRO401 Semana 4</string>
-    <string name="google_maps_key">TU_API_KEY_AQUI</string>
+    <string name="google_maps_key">API_KEY_AQUI</string>
 </resources>

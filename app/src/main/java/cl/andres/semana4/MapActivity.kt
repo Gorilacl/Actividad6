@@ -1,6 +1,7 @@
 package cl.andres.semana4
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,6 +9,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -21,8 +24,6 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import com.google.android.gms.maps.CameraUpdateFactory
 
-
-
 private const val BODEGA_LAT = -35.016
 private const val BODEGA_LON = -71.333
 private const val RADIO_GRATIS_KM = 20.0
@@ -34,7 +35,20 @@ class MapActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Scaffold(
-                    topBar = { TopAppBar(title = { Text("Mapa y cálculo de despacho") }) }
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("Mapa y cálculo de despacho") },
+                            navigationIcon = {
+                                val activity = LocalContext.current as? Activity
+                                IconButton(onClick = { activity?.finish() }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Volver"
+                                    )
+                                }
+                            }
+                        )
+                    }
                 ) { padding ->
                     MapScreen(Modifier.padding(padding))
                 }
@@ -54,7 +68,6 @@ private fun MapScreen(modifier: Modifier = Modifier) {
     var totalCompra by remember { mutableStateOf("") }
     var resultado by remember { mutableStateOf<String?>(null) }
 
-    // ¿Hay permisos actualmente?
     fun hasLocationPermission(): Boolean {
         val fine = ContextCompat.checkSelfPermission(
             ctx, Manifest.permission.ACCESS_FINE_LOCATION
@@ -69,7 +82,6 @@ private fun MapScreen(modifier: Modifier = Modifier) {
         position = CameraPosition.fromLatLngZoom(bodega, 12f)
     }
 
-    // Pido permisos cuando hace falta
     val pedirPermisos = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
@@ -81,9 +93,8 @@ private fun MapScreen(modifier: Modifier = Modifier) {
                     loc?.let {
                         val latLng = LatLng(it.latitude, it.longitude)
                         myLatLng = latLng
-                        // Uso la función ya existente en tu proyecto:
                         distanciaKm = haversineKm(it.latitude, it.longitude, BODEGA_LAT, BODEGA_LON)
-                        // Centro cámara en la ubicación del usuario
+                        // mover cámara
                         cameraPositionState.move(
                             CameraUpdateFactory.newLatLngZoom(latLng, 13f)
                         )
@@ -92,7 +103,6 @@ private fun MapScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    // Obtener ubicación al entrar
     LaunchedEffect(Unit) {
         if (!hasLocationPermission()) {
             pedirPermisos.launch(
@@ -124,22 +134,18 @@ private fun MapScreen(modifier: Modifier = Modifier) {
                 .height(340.dp),
             cameraPositionState = cameraPositionState,
             uiSettings = MapUiSettings(zoomControlsEnabled = true),
-            // Habilito "mi ubicación" solo si hay permisos
             properties = MapProperties(isMyLocationEnabled = hasLocationPermission())
         ) {
-            // Bodega
             Marker(
                 state = MarkerState(position = bodega),
                 title = "Bodega",
                 snippet = "Punto de referencia"
             )
-            // Radio de despacho GRATIS
             Circle(
                 center = bodega,
                 radius = RADIO_GRATIS_KM * 1000.0,
                 strokeWidth = 2f
             )
-            // Mi ubicación
             myLatLng?.let {
                 Marker(
                     state = MarkerState(position = it),
@@ -198,6 +204,15 @@ private fun MapScreen(modifier: Modifier = Modifier) {
                 ) { Text("Calcular despacho") }
 
                 resultado?.let { Text(it) }
+
+                // ✅ Botón visible para volver
+                val activity = LocalContext.current as? Activity  // Guarda el contexto aquí
+
+                Button(
+                    onClick = { activity?.finish() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Volver al menú") }
             }
         }
     }
